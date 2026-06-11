@@ -1,0 +1,41 @@
+services:
+  - type: web
+    name: uniware-vtiger-mcp
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: PYTHONPATH=src uvicorn vtiger_mcp.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.8"
+      - key: PYTHONPATH
+        value: src
+      - key: FASTMCP_STATELESS_HTTP
+        value: "true"
+      - key: ENVIRONMENT
+        value: production
+      - key: LOG_LEVEL
+        value: INFO
+      - key: MCP_API_KEY
+        sync: false
+      - key: MCP_AUTH_TOKEN
+        sync: false
+      - key: VTIGER_BASE_URL
+        sync: false
+      - key: VTIGER_USERNAME
+        sync: false
+      - key: VTIGER_ACCESS_KEY
+        sync: false
+      - key: VTIGER_FIELD_LEAD_FOLLOWUP_DATE
+        sync: false
+      - key: VTIGER_FIELD_LEAD_FOLLOWUP_DESC
+        sync: false
+      - key: VTIGER_FIELD_DEAL_LAST_CONTACTED
+        sync: false
+      - key: VTIGER_FIELD_DEAL_FOLLOWUP_DATE
+        sync: false
+      - key: VTIGER_FIELD_DEAL_FOLLOWUP_DESC
+        sync: false
+      - key: VTIGER_OPEN_DEAL_STAGES
+        sync: false

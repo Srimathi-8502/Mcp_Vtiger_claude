@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "uniware-vtiger-mcp"
+version = "1.0.0"
+description = "Phase 1 read-only Vtiger MCP server for Uniware AM Copilot"
+requires-python = ">=3.12"
+dependencies = [
+    "fastmcp>=3.4.0,<4",
+    "httpx>=0.28.0,<1",
+    "pydantic>=2.10.0,<3",
+    "pydantic-settings>=2.7.0,<3",
+    "uvicorn[standard]>=0.34.0,<1",
+    "python-dotenv>=1.0.0,<2",
+]
+
+[project.scripts]
+vtiger-mcp = "vtiger_mcp.main:run"
+
+[tool.setuptools.packages.find]
+where = ["src"]
