@@ -2,14 +2,14 @@
 
 Read-only [MCP](https://modelcontextprotocol.io/) server that connects Claude to **Vtiger CRM** for Uniware's Account Manager (AM) Copilot. Phase 1 exposes briefing tools for leads, deals, and overdue follow-ups.
 
-**Repository:** http://192.168.1.195/genai/claude_vtiger_mcp
+**Repository:** https://github.com/Srimathi-8502/Mcp_Vtiger_claude
 
 ## MCP tools
 
 | Tool | Description |
 |------|-------------|
 | `get_leads_by_owner` | Leads assigned to an AM (organisation, status, follow-up fields) |
-| `get_deals_by_owner` | Open deals for an AM (stage, amount, last contacted, follow-up) |
+| `get_deals_by_owner` | Open deals for an AM (organisation, stage, amount, last contacted, follow-up) |
 | `get_overdue_followups` | Leads and deals with follow-up date on or before today |
 
 All tools take an `owner` argument — the Vtiger user ID (e.g. `19x5`) agreed with your CRM admin.
@@ -24,8 +24,8 @@ All tools take an `owner` argument — the Vtiger user ID (e.g. `19x5`) agreed w
 
 ```bash
 # Clone
-git clone http://192.168.1.195/genai/claude_vtiger_mcp.git
-cd claude_vtiger_mcp
+git clone https://github.com/Srimathi-8502/Mcp_Vtiger_claude.git
+cd Mcp_Vtiger_claude
 
 # Virtual environment
 python -m venv .venv
@@ -71,6 +71,23 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
 
 See `.env.example` for the full list of field-mapping variables.
 
+### Confirmed Deals field mapping (Potentials module)
+
+Deals use the Vtiger module **`Potentials`** (not `Deals`).
+
+| Briefing field | Vtiger API name | Env var |
+|----------------|-----------------|---------|
+| Assigned AM | `assigned_user_id` | `VTIGER_FIELD_DEAL_OWNER` |
+| Deal name | `potentialname` | `VTIGER_FIELD_DEAL_NAME` |
+| Organization | `related_to` | `VTIGER_FIELD_DEAL_ORG` |
+| Deal stage | `sales_stage` | `VTIGER_FIELD_DEAL_STAGE` |
+| Amount | `amount` | `VTIGER_FIELD_DEAL_AMOUNT` |
+| Last contacted | `last_contacted_on` | `VTIGER_FIELD_DEAL_LAST_CONTACTED` |
+| Next follow-up date | `cf_potentials_nextfollowupdate` | `VTIGER_FIELD_DEAL_FOLLOWUP_DATE` |
+| Next follow-up description | `nextstep` | `VTIGER_FIELD_DEAL_FOLLOWUP_DESC` |
+
+Deal tool responses remap these to: `owner`, `deal_name`, `organisation_name`, `stage`, `amount`, `last_contacted_date`, `next_followup_date`, `next_followup_description`.
+
 ## Health checks
 
 | Endpoint | Purpose |
@@ -97,6 +114,7 @@ Run from the repo root with `PYTHONPATH=src` and `.env` loaded:
 python scripts/connection_check.py   # Vtiger login + MCP health probe
 python scripts/mcp_check.py            # MCP tool smoke test
 python scripts/describe_fields.py    # Inspect Vtiger module fields
+python scripts/describe_raw.py       # Full describe JSON for Leads/Potentials
 python scripts/test_tools.py         # Exercise CRM tools
 ```
 
@@ -127,7 +145,10 @@ src/vtiger_mcp/
   tools/crm.py      # MCP tool definitions
   vtiger/client.py  # Vtiger webservice client
 scripts/            # Local verification scripts
+docs/               # Technical architecture (TECHNICAL.md)
 ```
+
+See [docs/TECHNICAL.md](docs/TECHNICAL.md) for architecture and request flow.
 
 ## Security
 

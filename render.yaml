@@ -31,6 +31,8 @@ services:
         sync: false
       - key: VTIGER_FIELD_LEAD_FOLLOWUP_DESC
         sync: false
+      - key: VTIGER_FIELD_DEAL_ORG
+        sync: false
       - key: VTIGER_FIELD_DEAL_LAST_CONTACTED
         sync: false
       - key: VTIGER_FIELD_DEAL_FOLLOWUP_DATE

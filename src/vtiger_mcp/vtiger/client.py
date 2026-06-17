@@ -220,6 +220,7 @@ def _normalize_deal(record: dict[str, Any]) -> dict[str, Any]:
         "id": record.get("id"),
         "owner": record.get(settings.vtiger_field_deal_owner),
         "deal_name": record.get(settings.vtiger_field_deal_name),
+        "organisation_name": record.get(settings.vtiger_field_deal_org),
         "stage": record.get(settings.vtiger_field_deal_stage),
         "amount": record.get(settings.vtiger_field_deal_amount),
         "last_contacted_date": record.get(settings.vtiger_field_deal_last_contacted),

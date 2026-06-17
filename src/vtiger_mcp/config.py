@@ -69,6 +69,7 @@ class Settings(BaseSettings):
         alias="VTIGER_FIELD_DEAL_STAGE",
     )
     vtiger_field_deal_amount: str = Field(default="amount", alias="VTIGER_FIELD_DEAL_AMOUNT")
+    vtiger_field_deal_org: str = Field(default="related_to", alias="VTIGER_FIELD_DEAL_ORG")
     vtiger_field_deal_last_contacted: str = Field(
         default="",
         alias="VTIGER_FIELD_DEAL_LAST_CONTACTED",
@@ -118,6 +119,7 @@ class Settings(BaseSettings):
             "id",
             self.vtiger_field_deal_owner,
             self.vtiger_field_deal_name,
+            self.vtiger_field_deal_org,
             self.vtiger_field_deal_stage,
             self.vtiger_field_deal_amount,
         ]
