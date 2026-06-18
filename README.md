@@ -79,14 +79,14 @@ Deals use the Vtiger module **`Potentials`** (not `Deals`).
 |----------------|-----------------|---------|
 | Assigned AM | `assigned_user_id` | `VTIGER_FIELD_DEAL_OWNER` |
 | Deal name | `potentialname` | `VTIGER_FIELD_DEAL_NAME` |
-| Organization | `related_to` | `VTIGER_FIELD_DEAL_ORG` |
+| Organization | `related_to` | `VTIGER_FIELD_DEAL_ORG` (resolved to `accountname` via Accounts) |
 | Deal stage | `sales_stage` | `VTIGER_FIELD_DEAL_STAGE` |
 | Amount | `amount` | `VTIGER_FIELD_DEAL_AMOUNT` |
 | Last contacted | `last_contacted_on` | `VTIGER_FIELD_DEAL_LAST_CONTACTED` |
 | Next follow-up date | `cf_potentials_nextfollowupdate` | `VTIGER_FIELD_DEAL_FOLLOWUP_DATE` |
 | Next follow-up description | `nextstep` | `VTIGER_FIELD_DEAL_FOLLOWUP_DESC` |
 
-Deal tool responses remap these to: `owner`, `deal_name`, `organisation_name`, `stage`, `amount`, `last_contacted_date`, `next_followup_date`, `next_followup_description`.
+Deal tool responses remap these to: `owner`, `deal_name`, `organisation_id`, `organisation_name` (resolved from Accounts), `stage`, `amount`, `last_contacted_date`, `next_followup_date`, `next_followup_description`.
 
 ## Health checks
 

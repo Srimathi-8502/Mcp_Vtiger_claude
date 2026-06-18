@@ -35,6 +35,11 @@ class Settings(BaseSettings):
     # Modules
     vtiger_leads_module: str = Field(default="Leads", alias="VTIGER_LEADS_MODULE")
     vtiger_deals_module: str = Field(default="Potentials", alias="VTIGER_DEALS_MODULE")
+    vtiger_accounts_module: str = Field(default="Accounts", alias="VTIGER_ACCOUNTS_MODULE")
+    vtiger_field_account_name: str = Field(
+        default="accountname",
+        alias="VTIGER_FIELD_ACCOUNT_NAME",
+    )
 
     # Lead field mapping (override after Natasha field-mapping session)
     vtiger_field_lead_owner: str = Field(

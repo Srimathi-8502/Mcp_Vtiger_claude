@@ -4,7 +4,7 @@ import hashlib
 import logging
 import re
 from datetime import date
-from typing import Any
+from typing import Any, Iterable
 
 import httpx
 
@@ -13,6 +13,7 @@ from vtiger_mcp.config import Settings, get_settings
 logger = logging.getLogger(__name__)
 
 _SAFE_IDENTIFIER = re.compile(r"^[A-Za-z0-9_]+$")
+_SAFE_RECORD_ID = re.compile(r"^[0-9]+x[0-9]+$")
 
 
 class VtigerError(RuntimeError):
@@ -137,7 +138,7 @@ class VtigerClient:
 
         query = f"SELECT {fields} FROM {module} WHERE {' AND '.join(where_parts)};"
         raw = await self.query_all(query)
-        return [_normalize_deal(record) for record in raw]
+        return await self._normalize_deals(raw)
 
     async def get_overdue_followups(
         self,
@@ -180,9 +181,46 @@ class VtigerClient:
                 f"WHERE {deal_owner_field} = {owner_value} "
                 f"AND {deal_date} <= {as_of_value};"
             )
-            deals = [_normalize_deal(record) for record in await self.query_all(deal_query)]
+            deals = await self._normalize_deals(await self.query_all(deal_query))
 
         return {"leads": leads, "deals": deals}
+
+    async def _normalize_deals(self, records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        account_names = await self._resolve_account_names(
+            record.get(self.settings.vtiger_field_deal_org) for record in records
+        )
+        return [_normalize_deal(record, account_names) for record in records]
+
+    async def _resolve_account_names(self, account_ids: Iterable[Any]) -> dict[str, str]:
+        unique: list[str] = []
+        seen: set[str] = set()
+        for raw_id in account_ids:
+            if not raw_id:
+                continue
+            account_id = str(raw_id).strip()
+            if not _validate_record_id(account_id) or account_id in seen:
+                continue
+            seen.add(account_id)
+            unique.append(account_id)
+
+        if not unique:
+            return {}
+
+        module = _validate_module(self.settings.vtiger_accounts_module)
+        name_field = _validate_field(self.settings.vtiger_field_account_name)
+        lookup: dict[str, str] = {}
+        chunk_size = 50
+
+        for offset in range(0, len(unique), chunk_size):
+            chunk = unique[offset : offset + chunk_size]
+            id_list = ", ".join(_quote(account_id) for account_id in chunk)
+            query = f"SELECT id, {name_field} FROM {module} WHERE id IN ({id_list});"
+            for row in await self.query_all(query):
+                record_id = row.get("id")
+                if record_id:
+                    lookup[str(record_id)] = row.get(name_field)
+
+        return lookup
 
 
 def _validate_module(name: str) -> str:
@@ -214,13 +252,26 @@ def _normalize_lead(record: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _normalize_deal(record: dict[str, Any]) -> dict[str, Any]:
+def _validate_record_id(value: str) -> bool:
+    return bool(_SAFE_RECORD_ID.match(value))
+
+
+def _normalize_deal(
+    record: dict[str, Any],
+    account_names: dict[str, str] | None = None,
+) -> dict[str, Any]:
     settings = get_settings()
+    organisation_id = record.get(settings.vtiger_field_deal_org)
+    organisation_name = None
+    if organisation_id is not None:
+        organisation_id = str(organisation_id)
+        organisation_name = (account_names or {}).get(organisation_id)
     return {
         "id": record.get("id"),
         "owner": record.get(settings.vtiger_field_deal_owner),
         "deal_name": record.get(settings.vtiger_field_deal_name),
-        "organisation_name": record.get(settings.vtiger_field_deal_org),
+        "organisation_id": organisation_id,
+        "organisation_name": organisation_name,
         "stage": record.get(settings.vtiger_field_deal_stage),
         "amount": record.get(settings.vtiger_field_deal_amount),
         "last_contacted_date": record.get(settings.vtiger_field_deal_last_contacted),
