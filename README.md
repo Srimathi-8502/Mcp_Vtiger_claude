@@ -88,6 +88,8 @@ Deals use the Vtiger module **`Potentials`** (not `Deals`).
 
 Deal tool responses remap these to: `owner`, `deal_name`, `organisation_id`, `organisation_name` (resolved from Accounts), `stage`, `amount`, `last_contacted_date`, `next_followup_date`, `next_followup_description`.
 
+**Leads follow-up:** Vtiger `Leads` has no next-follow-up date field (unlike Potentials `cf_potentials_nextfollowupdate`). `get_overdue_followups` returns **deals only** until a Leads date field exists in CRM. Use `get_leads_by_owner` for leads in the briefing.
+
 ## Health checks
 
 | Endpoint | Purpose |
