@@ -14,6 +14,18 @@ logger = logging.getLogger(__name__)
 
 _SAFE_IDENTIFIER = re.compile(r"^[A-Za-z0-9_]+$")
 _SAFE_RECORD_ID = re.compile(r"^[0-9]+x[0-9]+$")
+_STALE_SESSION_MARKERS = (
+    "session identifier",
+    "invalid session",
+    "session expired",
+    "sessionid",
+    "authentication required",
+)
+
+
+def _is_stale_session_error(message: str) -> bool:
+    lowered = message.lower()
+    return any(marker in lowered for marker in _STALE_SESSION_MARKERS)
 
 
 class VtigerError(RuntimeError):
@@ -77,37 +89,58 @@ class VtigerClient:
         logger.info("Vtiger session established for user=%s", self.settings.vtiger_username)
         return self._session_name
 
+    def _clear_session(self) -> None:
+        self._session_name = None
+
     async def _get_session(self, client: httpx.AsyncClient) -> str:
         if self._session_name:
             return self._session_name
         return await self._login(client)
 
+    async def _run_query(
+        self,
+        client: httpx.AsyncClient,
+        session_name: str,
+        paged_query: str,
+    ) -> list[dict[str, Any]]:
+        batch = await self._request(
+            client,
+            method="GET",
+            params={
+                "operation": "query",
+                "sessionName": session_name,
+                "query": paged_query,
+            },
+        )
+        return batch or []
+
     async def query_all(self, query: str) -> list[dict[str, Any]]:
         page_size = max(1, min(self.settings.vtiger_query_page_size, 100))
-        offset = 0
-        records: list[dict[str, Any]] = []
-
         timeout = httpx.Timeout(self.settings.vtiger_request_timeout_seconds)
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            session_name = await self._get_session(client)
-            while True:
-                base_query = query.rstrip().rstrip(";")
-                paged_query = f"{base_query} LIMIT {offset}, {page_size};"
-                batch = await self._request(
-                    client,
-                    method="GET",
-                    params={
-                        "operation": "query",
-                        "sessionName": session_name,
-                        "query": paged_query,
-                    },
-                )
-                if not batch:
-                    break
-                records.extend(batch)
-                if len(batch) < page_size:
-                    break
-                offset += page_size
+
+        for attempt in range(2):
+            offset = 0
+            records: list[dict[str, Any]] = []
+            try:
+                async with httpx.AsyncClient(timeout=timeout) as client:
+                    session_name = await self._get_session(client)
+                    while True:
+                        base_query = query.rstrip().rstrip(";")
+                        paged_query = f"{base_query} LIMIT {offset}, {page_size};"
+                        batch = await self._run_query(client, session_name, paged_query)
+                        if not batch:
+                            break
+                        records.extend(batch)
+                        if len(batch) < page_size:
+                            break
+                        offset += page_size
+                return records
+            except VtigerError as exc:
+                if attempt == 0 and _is_stale_session_error(str(exc)):
+                    logger.warning("Vtiger session expired; re-authenticating and retrying query")
+                    self._clear_session()
+                    continue
+                raise
 
         return records
 
