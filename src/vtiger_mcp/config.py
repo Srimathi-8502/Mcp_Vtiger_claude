@@ -21,6 +21,32 @@ class Settings(BaseSettings):
     # MCP auth (Claude → this server)
     mcp_api_key: str = Field(default="", alias="MCP_API_KEY")
     mcp_auth_token: str = Field(default="", alias="MCP_AUTH_TOKEN")
+    mcp_public_base_url: str = Field(default="", alias="MCP_PUBLIC_BASE_URL")
+    mcp_dev_user_email: str = Field(default="", alias="MCP_DEV_USER_EMAIL")
+    oauth_allowed_domain: str = Field(default="uniware.net", alias="OAUTH_ALLOWED_DOMAIN")
+
+    # Microsoft Entra ID (recommended for @uniware.net Microsoft 365 accounts)
+    azure_tenant_id: str = Field(default="", alias="AZURE_TENANT_ID")
+    azure_client_id: str = Field(default="", alias="AZURE_CLIENT_ID")
+    azure_client_secret: str = Field(default="", alias="AZURE_CLIENT_SECRET")
+    azure_required_scopes: str = Field(
+        default="mcp-access",
+        alias="AZURE_REQUIRED_SCOPES",
+    )
+
+    # Google OAuth (optional alternative)
+    google_oauth_client_id: str = Field(default="", alias="GOOGLE_OAUTH_CLIENT_ID")
+    google_oauth_client_secret: str = Field(default="", alias="GOOGLE_OAUTH_CLIENT_SECRET")
+    google_oauth_allowed_domain: str = Field(
+        default="",
+        alias="GOOGLE_OAUTH_ALLOWED_DOMAIN",
+    )
+
+    # Comma-separated emails with access to all AM data (e.g. nirmal@uniware.net)
+    vtiger_admin_emails: str = Field(
+        default="nirmal@uniware.net",
+        alias="VTIGER_ADMIN_EMAILS",
+    )
 
     # Vtiger connection
     vtiger_base_url: str = Field(default="", alias="VTIGER_BASE_URL")
@@ -91,10 +117,47 @@ class Settings(BaseSettings):
     # Comma-separated open stages; empty = no stage filter
     vtiger_open_deal_stages: str = Field(default="", alias="VTIGER_OPEN_DEAL_STAGES")
 
-    @field_validator("vtiger_base_url")
+    @field_validator("vtiger_base_url", "mcp_public_base_url")
     @classmethod
     def strip_trailing_slash(cls, value: str) -> str:
         return value.rstrip("/")
+
+    @property
+    def azure_oauth_enabled(self) -> bool:
+        return bool(
+            self.azure_client_id
+            and self.azure_client_secret
+            and self.azure_tenant_id
+            and self.mcp_public_base_url
+        )
+
+    @property
+    def google_oauth_enabled(self) -> bool:
+        return bool(
+            self.google_oauth_client_id
+            and self.google_oauth_client_secret
+            and self.mcp_public_base_url
+        )
+
+    @property
+    def oauth_enabled(self) -> bool:
+        return self.azure_oauth_enabled or self.google_oauth_enabled
+
+    @property
+    def azure_scope_list(self) -> list[str]:
+        if not self.azure_required_scopes.strip():
+            return ["mcp-access"]
+        return [
+            scope.strip()
+            for scope in self.azure_required_scopes.split(",")
+            if scope.strip()
+        ]
+
+    @property
+    def allowed_email_domain(self) -> str:
+        if self.google_oauth_allowed_domain.strip():
+            return self.google_oauth_allowed_domain.strip().lower()
+        return self.oauth_allowed_domain.strip().lower()
 
     @property
     def vtiger_webservice_url(self) -> str:

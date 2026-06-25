@@ -144,75 +144,91 @@ class VtigerClient:
 
         return records
 
-    async def get_leads_by_owner(self, owner: str) -> list[dict[str, Any]]:
-        owner_value = _quote(owner)
-        owner_field = _validate_field(self.settings.vtiger_field_lead_owner)
+    async def list_users(self) -> list[dict[str, Any]]:
+        query = "SELECT id, user_name, first_name, last_name, email1, status FROM Users;"
+        return await self.query_all(query)
+
+    async def get_leads_by_owner(self, owner: str | None = None) -> list[dict[str, Any]]:
         module = _validate_module(self.settings.vtiger_leads_module)
         fields = ", ".join(_validate_field(field) for field in self.settings.lead_select_fields())
-        query = (
-            f"SELECT {fields} FROM {module} "
-            f"WHERE {owner_field} = {owner_value};"
-        )
+        if owner is None:
+            query = f"SELECT {fields} FROM {module};"
+        else:
+            owner_value = _quote(owner)
+            owner_field = _validate_field(self.settings.vtiger_field_lead_owner)
+            query = (
+                f"SELECT {fields} FROM {module} "
+                f"WHERE {owner_field} = {owner_value};"
+            )
         raw = await self.query_all(query)
         return [_normalize_lead(record) for record in raw]
 
-    async def get_deals_by_owner(self, owner: str) -> list[dict[str, Any]]:
-        owner_value = _quote(owner)
-        owner_field = _validate_field(self.settings.vtiger_field_deal_owner)
+    async def get_deals_by_owner(self, owner: str | None = None) -> list[dict[str, Any]]:
         module = _validate_module(self.settings.vtiger_deals_module)
         fields = ", ".join(_validate_field(field) for field in self.settings.deal_select_fields())
 
-        where_parts = [f"{owner_field} = {owner_value}"]
+        where_parts: list[str] = []
+        if owner is not None:
+            owner_value = _quote(owner)
+            owner_field = _validate_field(self.settings.vtiger_field_deal_owner)
+            where_parts.append(f"{owner_field} = {owner_value}")
+
         open_stages = self.settings.open_deal_stage_list
         if open_stages:
             stage_field = _validate_field(self.settings.vtiger_field_deal_stage)
             stage_values = ", ".join(_quote(stage) for stage in open_stages)
             where_parts.append(f"{stage_field} IN ({stage_values})")
 
-        query = f"SELECT {fields} FROM {module} WHERE {' AND '.join(where_parts)};"
+        if where_parts:
+            query = f"SELECT {fields} FROM {module} WHERE {' AND '.join(where_parts)};"
+        else:
+            query = f"SELECT {fields} FROM {module};"
         raw = await self.query_all(query)
         return await self._normalize_deals(raw)
 
     async def get_overdue_followups(
         self,
-        owner: str,
+        owner: str | None = None,
         *,
         as_of: date | None = None,
     ) -> dict[str, list[dict[str, Any]]]:
         as_of = as_of or date.today()
         as_of_value = _quote(as_of.isoformat())
-        owner_value = _quote(owner)
 
         leads: list[dict[str, Any]] = []
         deals: list[dict[str, Any]] = []
 
         lead_date_field = self.settings.vtiger_field_lead_followup_date
         if lead_date_field:
-            lead_owner_field = _validate_field(self.settings.vtiger_field_lead_owner)
             lead_module = _validate_module(self.settings.vtiger_leads_module)
             lead_fields = ", ".join(
                 _validate_field(field) for field in self.settings.lead_select_fields()
             )
             lead_date = _validate_field(lead_date_field)
+            lead_where = [f"{lead_date} <= {as_of_value}"]
+            if owner is not None:
+                lead_owner_field = _validate_field(self.settings.vtiger_field_lead_owner)
+                lead_where.insert(0, f"{lead_owner_field} = {_quote(owner)}")
             lead_query = (
                 f"SELECT {lead_fields} FROM {lead_module} "
-                f"WHERE {lead_owner_field} = {owner_value} "
-                f"AND {lead_date} <= {as_of_value};"
+                f"WHERE {' AND '.join(lead_where)};"
             )
             leads = [_normalize_lead(record) for record in await self.query_all(lead_query)]
 
         deal_date_field = self.settings.vtiger_field_deal_followup_date
         if deal_date_field:
-            deal_owner_field = _validate_field(self.settings.vtiger_field_deal_owner)
             deal_module = _validate_module(self.settings.vtiger_deals_module)
             deal_fields = ", ".join(
                 _validate_field(field) for field in self.settings.deal_select_fields()
             )
             deal_date = _validate_field(deal_date_field)
+            deal_where = [f"{deal_date} <= {as_of_value}"]
+            if owner is not None:
+                deal_owner_field = _validate_field(self.settings.vtiger_field_deal_owner)
+                deal_where.insert(0, f"{deal_owner_field} = {_quote(owner)}")
             deal_query = (
                 f"SELECT {deal_fields} FROM {deal_module} "
-                f"WHERE {deal_owner_field} = {owner_value} "
-                f"AND {deal_date} <= {as_of_value};"
+                f"WHERE {' AND '.join(deal_where)};"
             )
             deals = await self._normalize_deals(await self.query_all(deal_query))
 

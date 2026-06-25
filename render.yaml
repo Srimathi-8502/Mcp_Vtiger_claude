@@ -17,6 +17,24 @@ services:
         value: production
       - key: LOG_LEVEL
         value: INFO
+      - key: MCP_PUBLIC_BASE_URL
+        sync: false
+      - key: OAUTH_ALLOWED_DOMAIN
+        value: uniware.net
+      - key: AZURE_TENANT_ID
+        sync: false
+      - key: AZURE_CLIENT_ID
+        sync: false
+      - key: AZURE_CLIENT_SECRET
+        sync: false
+      - key: AZURE_REQUIRED_SCOPES
+        value: mcp-access
+      - key: GOOGLE_OAUTH_CLIENT_ID
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_SECRET
+        sync: false
+      - key: VTIGER_ADMIN_EMAILS
+        value: nirmal@uniware.net
       - key: MCP_API_KEY
         sync: false
       - key: MCP_AUTH_TOKEN
