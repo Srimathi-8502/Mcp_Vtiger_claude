@@ -67,7 +67,7 @@ class Settings(BaseSettings):
         alias="VTIGER_FIELD_ACCOUNT_NAME",
     )
 
-    # Lead field mapping (override after Natasha field-mapping session)
+    # Lead field mapping
     vtiger_field_lead_owner: str = Field(
         default="assigned_user_id",
         alias="VTIGER_FIELD_LEAD_OWNER",
@@ -86,7 +86,7 @@ class Settings(BaseSettings):
         alias="VTIGER_FIELD_LEAD_FOLLOWUP_DESC",
     )
 
-    # Deal field mapping
+    # Deal field mapping — core (Phase 1 original)
     vtiger_field_deal_owner: str = Field(
         default="assigned_user_id",
         alias="VTIGER_FIELD_DEAL_OWNER",
@@ -102,16 +102,50 @@ class Settings(BaseSettings):
     vtiger_field_deal_amount: str = Field(default="amount", alias="VTIGER_FIELD_DEAL_AMOUNT")
     vtiger_field_deal_org: str = Field(default="related_to", alias="VTIGER_FIELD_DEAL_ORG")
     vtiger_field_deal_last_contacted: str = Field(
-        default="",
+        default="last_contacted_on",
         alias="VTIGER_FIELD_DEAL_LAST_CONTACTED",
     )
     vtiger_field_deal_followup_date: str = Field(
-        default="",
+        default="cf_potentials_nextfollowupdate",
         alias="VTIGER_FIELD_DEAL_FOLLOWUP_DATE",
     )
     vtiger_field_deal_followup_desc: str = Field(
-        default="",
+        default="nextstep",
         alias="VTIGER_FIELD_DEAL_FOLLOWUP_DESC",
+    )
+
+    # Deal field mapping — Phase 1 additions (confirmed API keys from describe_raw.py)
+    vtiger_field_deal_close_date: str = Field(
+        default="closingdate",
+        alias="VTIGER_FIELD_DEAL_CLOSE_DATE",
+    )
+    vtiger_field_deal_type: str = Field(
+        default="opportunity_type",
+        alias="VTIGER_FIELD_DEAL_TYPE",
+    )
+    vtiger_field_deal_type_subcategory: str = Field(
+        default="cf_potentials_subcategoryoftype",
+        alias="VTIGER_FIELD_DEAL_TYPE_SUBCATEGORY",
+    )
+    vtiger_field_deal_oem_category: str = Field(
+        default="cf_potentials_oem",
+        alias="VTIGER_FIELD_DEAL_OEM_CATEGORY",
+    )
+    vtiger_field_deal_oem_subcategory: str = Field(
+        default="cf_potentials_oemsubcategory",
+        alias="VTIGER_FIELD_DEAL_OEM_SUBCATEGORY",
+    )
+    vtiger_field_deal_stage_changed_at: str = Field(
+        default="current_stage_entry_time",
+        alias="VTIGER_FIELD_DEAL_STAGE_CHANGED_AT",
+    )
+    vtiger_field_deal_last_contacted_via: str = Field(
+        default="last_contacted_via",
+        alias="VTIGER_FIELD_DEAL_LAST_CONTACTED_VIA",
+    )
+    vtiger_field_deal_region: str = Field(
+        default="cf_potentials_region",
+        alias="VTIGER_FIELD_DEAL_REGION",
     )
 
     # Comma-separated open stages; empty = no stage filter
@@ -190,6 +224,15 @@ class Settings(BaseSettings):
             self.vtiger_field_deal_org,
             self.vtiger_field_deal_stage,
             self.vtiger_field_deal_amount,
+            # Phase 1 additions
+            self.vtiger_field_deal_close_date,
+            self.vtiger_field_deal_type,
+            self.vtiger_field_deal_type_subcategory,
+            self.vtiger_field_deal_oem_category,
+            self.vtiger_field_deal_oem_subcategory,
+            self.vtiger_field_deal_stage_changed_at,
+            self.vtiger_field_deal_last_contacted_via,
+            self.vtiger_field_deal_region,
         ]
         if self.vtiger_field_deal_last_contacted:
             fields.append(self.vtiger_field_deal_last_contacted)
