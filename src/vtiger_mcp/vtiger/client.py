@@ -316,6 +316,7 @@ def _normalize_deal(
         organisation_id = str(organisation_id)
         organisation_name = (account_names or {}).get(organisation_id)
     return {
+        # --- Phase 1 original fields ---
         "id": record.get("id"),
         "owner": record.get(settings.vtiger_field_deal_owner),
         "deal_name": record.get(settings.vtiger_field_deal_name),
@@ -326,4 +327,13 @@ def _normalize_deal(
         "last_contacted_date": record.get(settings.vtiger_field_deal_last_contacted),
         "next_followup_date": record.get(settings.vtiger_field_deal_followup_date),
         "next_followup_description": record.get(settings.vtiger_field_deal_followup_desc),
+        # --- Phase 1 additions ---
+        "expected_close_date": record.get(settings.vtiger_field_deal_close_date),
+        "deal_type": record.get(settings.vtiger_field_deal_type),
+        "deal_type_subcategory": record.get(settings.vtiger_field_deal_type_subcategory),
+        "oem_category": record.get(settings.vtiger_field_deal_oem_category),
+        "oem_subcategory": record.get(settings.vtiger_field_deal_oem_subcategory),
+        "stage_changed_at": record.get(settings.vtiger_field_deal_stage_changed_at),
+        "last_contacted_via": record.get(settings.vtiger_field_deal_last_contacted_via),
+        "region": record.get(settings.vtiger_field_deal_region),
     }
