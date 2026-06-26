@@ -147,10 +147,11 @@ src/vtiger_mcp/
   tools/crm.py      # MCP tool definitions
   vtiger/client.py  # Vtiger webservice client
 scripts/            # Local verification scripts
-docs/               # Technical architecture (TECHNICAL.md)
+docs/               # Technical architecture and project history
 ```
 
-See [docs/TECHNICAL.md](docs/TECHNICAL.md) for architecture and request flow.
+See [docs/TECHNICAL.md](docs/TECHNICAL.md) for architecture and request flow.  
+See [docs/PROJECT_JOURNEY_AND_TECHNICAL_HISTORY.md](docs/PROJECT_JOURNEY_AND_TECHNICAL_HISTORY.md) for full project journey, issues, and module reference.
 
 ## Security
 
