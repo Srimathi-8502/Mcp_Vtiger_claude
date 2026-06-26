@@ -102,6 +102,8 @@ async def readiness_check(_request):
                 if settings.google_oauth_enabled
                 else None
             ),
+            "open_deal_stage_filter_enabled": bool(settings.open_deal_stage_list),
+            "open_deal_stage_count": len(settings.open_deal_stage_list),
             "missing_configuration": missing,
         },
         status_code=code,

@@ -34,7 +34,7 @@ services:
       - key: GOOGLE_OAUTH_CLIENT_SECRET
         sync: false
       - key: VTIGER_ADMIN_EMAILS
-        value: nirmal@uniware.net
+        value: nirmal@uniware.net,ilakkiya@uniware.net
       - key: MCP_API_KEY
         sync: false
       - key: MCP_AUTH_TOKEN
