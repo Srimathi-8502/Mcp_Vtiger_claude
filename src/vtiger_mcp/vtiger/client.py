@@ -238,7 +238,39 @@ class VtigerClient:
         account_names = await self._resolve_account_names(
             record.get(self.settings.vtiger_field_deal_org) for record in records
         )
-        return [_normalize_deal(record, account_names) for record in records]
+        owner_names = await self._resolve_owner_names(
+            record.get(self.settings.vtiger_field_deal_owner) for record in records
+        )
+        return [_normalize_deal(record, account_names, owner_names) for record in records]
+
+    async def _resolve_owner_names(self, owner_ids: Iterable[Any]) -> dict[str, str]:
+        unique: list[str] = []
+        seen: set[str] = set()
+        for raw_id in owner_ids:
+            if not raw_id:
+                continue
+            owner_id = str(raw_id).strip()
+            if owner_id in seen:
+                continue
+            seen.add(owner_id)
+            unique.append(owner_id)
+
+        if not unique:
+            return {}
+
+        users = await self.list_users()
+        lookup: dict[str, str] = {}
+        for row in users:
+            user_id = row.get("id")
+            if not user_id:
+                continue
+            display_name = " ".join(
+                part for part in [row.get("first_name"), row.get("last_name")] if part
+            ).strip()
+            if display_name:
+                lookup[str(user_id)] = display_name
+
+        return lookup
 
     async def _resolve_account_names(self, account_ids: Iterable[Any]) -> dict[str, str]:
         unique: list[str] = []
@@ -308,6 +340,7 @@ def _validate_record_id(value: str) -> bool:
 def _normalize_deal(
     record: dict[str, Any],
     account_names: dict[str, str] | None = None,
+    owner_names: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     settings = get_settings()
     organisation_id = record.get(settings.vtiger_field_deal_org)
@@ -315,10 +348,17 @@ def _normalize_deal(
     if organisation_id is not None:
         organisation_id = str(organisation_id)
         organisation_name = (account_names or {}).get(organisation_id)
+
+    owner_id = record.get(settings.vtiger_field_deal_owner)
+    owner_name = None
+    if owner_id is not None:
+        owner_name = (owner_names or {}).get(str(owner_id))
+
     return {
         # --- Phase 1 original fields ---
         "id": record.get("id"),
-        "owner": record.get(settings.vtiger_field_deal_owner),
+        "owner": owner_id,
+        "owner_name": owner_name,
         "deal_name": record.get(settings.vtiger_field_deal_name),
         "organisation_id": organisation_id,
         "organisation_name": organisation_name,
