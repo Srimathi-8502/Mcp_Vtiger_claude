@@ -32,6 +32,31 @@ class VtigerError(RuntimeError):
     """Raised when Vtiger webservice returns an error response."""
 
 
+# Confirmed against live Vtiger, 10 Aug 2026 (scripts/test_operators.py).
+# IS NULL / IS NOT NULL are NOT supported, do not add them.
+_SUPPORTED_OPERATORS = {"=", "!=", "<", ">", "<=", ">=", "IN", "LIKE", "NOTLIKE"}
+
+
+def _build_filter_clause(filter_: dict[str, Any]) -> str:
+    field = _validate_field(str(filter_.get("field", "")))
+    operator = str(filter_.get("operator", "")).upper()
+    if operator not in _SUPPORTED_OPERATORS:
+        raise VtigerError(
+            f"Unsupported operator '{operator}'. Supported: {', '.join(sorted(_SUPPORTED_OPERATORS))}"
+        )
+    value = filter_.get("value")
+
+    if operator == "IN":
+        if not isinstance(value, (list, tuple)) or not value:
+            raise VtigerError("IN operator requires a non-empty list value")
+        quoted_values = ", ".join(_quote(str(item)) for item in value)
+        return f"{field} IN ({quoted_values})"
+
+    if value is None:
+        raise VtigerError(f"Filter on '{field}' is missing a value")
+    return f"{field} {operator} {_quote(str(value))}"
+
+
 class VtigerClient:
     def __init__(self, settings: Settings | None = None) -> None:
         self.settings = settings or get_settings()
@@ -142,6 +167,73 @@ class VtigerClient:
                     continue
                 raise
 
+        return records
+
+    async def query_module(
+        self,
+        *,
+        module: str,
+        default_fields: tuple[str, ...],
+        all_fields: tuple[str, ...],
+        fields: list[str] | None = None,
+        filters: list[dict[str, Any]] | None = None,
+        order_by: str | None = None,
+        order_direction: str = "asc",
+        limit: int | None = None,
+        owner: str | None = None,
+        owner_field: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """
+        Generic, field/filter/sort-driven query against a single Vtiger
+        module. No hardcoded WHERE clauses: every filter comes from the
+        `filters` argument. The only fixed behaviour is:
+          - default_fields is used when `fields` is omitted, to keep vague
+            queries small.
+          - owner scoping, when `owner` is not None, is always ANDed in and
+            cannot be overridden by `filters` (access control, not a filter).
+
+        Every field named in `fields`, `filters`, or `order_by` must be in
+        `all_fields` or this raises VtigerError before any request is sent.
+        """
+        module = _validate_module(module)
+        allowed = set(all_fields) | {"id"}
+
+        requested = list(fields) if fields else list(default_fields)
+        unknown = [f for f in requested if f not in allowed]
+        if unknown:
+            raise VtigerError(
+                f"Unknown field(s) for {module}: {', '.join(unknown)}. "
+                f"Allowed fields: {', '.join(sorted(allowed))}"
+            )
+        select_fields = ", ".join(
+            _validate_field(f) for f in dict.fromkeys(["id", *requested])
+        )
+
+        where_parts: list[str] = []
+        if owner is not None:
+            if not owner_field:
+                raise VtigerError(f"{module} has no owner_field configured for scoping")
+            where_parts.append(f"{_validate_field(owner_field)} = {_quote(owner)}")
+
+        for filter_ in filters or []:
+            field = str(filter_.get("field", ""))
+            if field not in allowed:
+                raise VtigerError(f"Unknown filter field for {module}: {field}")
+            where_parts.append(_build_filter_clause(filter_))
+
+        query = f"SELECT {select_fields} FROM {module}"
+        if where_parts:
+            query += " WHERE " + " AND ".join(where_parts)
+        if order_by:
+            if order_by not in allowed:
+                raise VtigerError(f"Unknown order_by field for {module}: {order_by}")
+            direction = "DESC" if order_direction.lower() == "desc" else "ASC"
+            query += f" ORDER BY {_validate_field(order_by)} {direction}"
+        query += ";"
+
+        records = await self.query_all(query)
+        if limit is not None:
+            records = records[:limit]
         return records
 
     async def list_users(self) -> list[dict[str, Any]]:
