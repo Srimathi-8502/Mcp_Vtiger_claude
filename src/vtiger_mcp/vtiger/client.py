@@ -505,6 +505,36 @@ def _quote(value: str) -> str:
     return f"'{escaped}'"
 
 
+def extract_line_items(raw_record: dict[str, Any]) -> list[dict[str, Any]]:
+    """
+    Extract a clean line-item list from a SalesOrder retrieve() response.
+
+    Confirmed against a real record, 10 Aug 2026: each line item exposes
+    both purchase_cost (a LINE TOTAL, quantity x unit cost) and
+    unit_purchase_cost (PER UNIT) directly. Use unit_purchase_cost, never
+    divide purchase_cost by quantity yourself, that was the specific trap
+    flagged before this was verified.
+    """
+    items = raw_record.get("LineItems") or []
+    return [
+        {
+            "product_name": item.get("product_name"),
+            "product_id": item.get("productid"),
+            "quantity": item.get("quantity"),
+            "unit_list_price": item.get("listprice"),
+            "unit_purchase_cost": item.get("unit_purchase_cost"),
+            "line_total_purchase_cost": item.get("purchase_cost"),
+            "line_total_net_price": item.get("netprice"),
+            "line_margin": item.get("margin"),
+            "margin_percentage": item.get("margin_percentage"),
+            "markup_percentage": item.get("markup_percentage"),
+            "section_name": item.get("section_name"),
+            "description": item.get("comment"),
+        }
+        for item in items
+    ]
+
+
 def _normalize_lead(record: dict[str, Any]) -> dict[str, Any]:
     settings = get_settings()
     return {
