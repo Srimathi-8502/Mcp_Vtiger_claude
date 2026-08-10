@@ -295,6 +295,39 @@ class VtigerClient:
                 resolved.append(filter_)
         return resolved
 
+    async def retrieve_record(self, record_id: str) -> dict[str, Any]:
+        """
+        Fetch a single record's full detail via Vtiger's `retrieve` operation,
+        the only way to get line items (products, unit price, quantity, cost).
+        `query` always returns 0.0% on these fields at the module level, this
+        is not a data gap, it's an API distinction. One call per record, not
+        viable for bulk analytics, only for a specific record the AM named.
+        """
+        if not _SAFE_RECORD_ID.match(record_id):
+            raise VtigerError(f"Invalid record id: {record_id}")
+
+        timeout = httpx.Timeout(self.settings.vtiger_request_timeout_seconds)
+        for attempt in range(2):
+            try:
+                async with httpx.AsyncClient(timeout=timeout) as client:
+                    session_name = await self._get_session(client)
+                    return await self._request(
+                        client,
+                        method="GET",
+                        params={
+                            "operation": "retrieve",
+                            "sessionName": session_name,
+                            "id": record_id,
+                        },
+                    )
+            except VtigerError as exc:
+                if attempt == 0 and _is_stale_session_error(str(exc)):
+                    logger.warning("Vtiger session expired; re-authenticating and retrying retrieve")
+                    self._clear_session()
+                    continue
+                raise
+        raise VtigerError("retrieve failed")
+
     async def list_users(self) -> list[dict[str, Any]]:
         query = "SELECT id, user_name, first_name, last_name, email1, status FROM Users;"
         return await self.query_all(query)
