@@ -151,6 +151,9 @@ class Settings(BaseSettings):
     # Comma-separated open stages; empty = no stage filter
     vtiger_open_deal_stages: str = Field(default="", alias="VTIGER_OPEN_DEAL_STAGES")
 
+    # vtcmsla (SLA / warranty / renewals) module
+    vtiger_sla_module: str = Field(default="vtcmsla", alias="VTIGER_SLA_MODULE")
+
     @field_validator("vtiger_base_url", "mcp_public_base_url")
     @classmethod
     def strip_trailing_slash(cls, value: str) -> str:
