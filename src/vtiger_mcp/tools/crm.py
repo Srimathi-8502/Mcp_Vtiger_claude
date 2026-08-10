@@ -13,7 +13,7 @@ from vtiger_mcp.auth.users import (
     get_user_resolver,
 )
 from vtiger_mcp.config import get_settings
-from vtiger_mcp.modules import POTENTIALS, VTCMSLA
+from vtiger_mcp.modules import POTENTIALS, SALESORDER, VTCMSLA
 from vtiger_mcp.vtiger.client import VtigerClient, VtigerError
 
 
@@ -202,6 +202,153 @@ def register_tools(mcp: FastMCP) -> None:
             return _json_error("get_my_deals", str(exc))
         except VtigerError as exc:
             return _json_error("get_my_deals", str(exc))
+
+    @mcp.tool
+    async def get_my_orders(
+        fields: list[str] | None = None,
+        filters: list[dict[str, Any]] | None = None,
+        order_by: str | None = None,
+        order_direction: str = "asc",
+        limit: int | None = None,
+        am_email: str | None = None,
+    ) -> str:
+        """
+        Query sales orders (SalesOrder module) for the signed-in Account
+        Manager. Order-level data only, no line items, use
+        get_order_line_items for a specific order's products/pricing.
+
+        Do not ask the user for a Vtiger owner ID. Regular AMs always see
+        only their own orders. Admins may pass am_email to view another
+        AM's orders, or omit it to view all.
+
+        Default fields, used when `fields` is omitted: order number,
+        organisation, sales order date, customer PO date, vendor, final
+        margin (the authoritative margin figure, use this not margin_total,
+        which is only 33% filled), order total, linked quote, linked deal,
+        status, customer type, owner.
+
+        There is no stored total for margin by month/quarter/year, Vtiger
+        only stores it per order. Sum cf_salesorder_finalmargin yourself
+        after fetching the relevant orders, this is a presentation gap in
+        Vtiger, not a missing field.
+
+        filters: list of {"field": ..., "operator": ..., "value": ...},
+        combined with AND. Supported operators: =, !=, <, >, <=, >=, IN,
+        LIKE, NOTLIKE. To filter by organisation, use field "account_id"
+        with your best guess at the name and operator "=" or "LIKE", do NOT
+        guess an internal ID, the tool resolves the name for you. Example,
+        one customer's order history across years, oldest first:
+          filters=[{"field": "account_id", "operator": "LIKE", "value": "Acme"}]
+          order_by="cf_salesorder_salesorderdate", order_direction="asc"
+
+        cf_salesorder_vendor is a string, not a lookup, vendor grouping
+        needs LIKE/text matching, not exact IDs.
+
+        order_by: field name to sort on. order_direction: "asc" or "desc".
+        limit: optional cap on rows returned, applied after sorting.
+
+        Fields available beyond the default set: customer PO number,
+        subtotal, credit days (customer and vendor), tax type, created/
+        modified by and time, currency, pre-tax total, target dates (SO and
+        PO), OEM, is closed, billing/shipping address, order date, customer
+        PO to SO delay, PO status, support category, margin_total and
+        purchase_cost_total (only ~33% filled, treat as supplementary not
+        authoritative), remarks, remarks technical, parking amount
+        (mostly historical, largely stopped being used ~2 years ago),
+        contact, terms and conditions.
+        """
+        try:
+            user = await get_authenticated_user()
+            owner_scope = await resolver.resolve_owner_scope(
+                am_email=am_email,
+                current_user=user,
+            )
+            resolved_filters = await client.resolve_org_name_filters(filters, SALESORDER.org_field)
+            records = await client.query_module(
+                module=SALESORDER.api_name,
+                default_fields=SALESORDER.default_fields,
+                all_fields=SALESORDER.all_fields,
+                fields=fields,
+                filters=resolved_filters,
+                order_by=order_by,
+                order_direction=order_direction,
+                limit=limit,
+                owner=owner_scope,
+                owner_field=SALESORDER.owner_field,
+            )
+            base_url = get_settings().vtiger_base_url
+            requested = set(fields) if fields else set(SALESORDER.default_fields)
+            if SALESORDER.org_field in requested:
+                await _enrich_org_names(records, SALESORDER.org_field)
+            _enrich_deep_links(records, base_url, SALESORDER.api_name)
+            return _json_response(
+                {
+                    "viewer_email": user.email,
+                    "is_admin": user.is_admin,
+                    "scope": "all" if owner_scope is None else owner_scope,
+                    "fields_returned": fields or list(SALESORDER.default_fields),
+                    "count": len(records),
+                    "orders": records,
+                }
+            )
+        except (AuthError, AccessDenied) as exc:
+            return _json_error("get_my_orders", str(exc))
+        except VtigerError as exc:
+            return _json_error("get_my_orders", str(exc))
+
+    @mcp.tool
+    async def get_order_line_items(order_id: str, am_email: str | None = None) -> str:
+        """
+        Fetch line-item detail (products, quantity, unit price, unit
+        purchase cost) for ONE specific sales order, by its Vtiger record
+        id (e.g. "11x12345", the `id` field from get_my_orders).
+
+        Use this only after get_my_orders has identified the specific order,
+        this cannot be used for bulk/across-many-orders analysis, it is one
+        API call per order. Regular AMs can only retrieve an order assigned
+        to them, checked before fetching. Admins may pass am_email to
+        retrieve on another AM's behalf, or omit it to retrieve any order.
+
+        IMPORTANT, unverified field mapping: this returns Vtiger's raw
+        `retrieve` response. The exact key holding line items, and whether
+        it exposes unit_purchase_cost directly or only purchase_cost (a
+        LINE TOTAL, not per-unit, do not divide loosely, quantity affects
+        it) has not yet been confirmed against a real record. Check the raw
+        output structure before trusting any derived per-unit number.
+        """
+        try:
+            user = await get_authenticated_user()
+            owner_scope = await resolver.resolve_owner_scope(
+                am_email=am_email,
+                current_user=user,
+            )
+            if owner_scope is not None:
+                owned = await client.query_module(
+                    module=SALESORDER.api_name,
+                    default_fields=("id",),
+                    all_fields=SALESORDER.all_fields,
+                    fields=["id"],
+                    filters=[{"field": "id", "operator": "=", "value": order_id}],
+                    owner=owner_scope,
+                    owner_field=SALESORDER.owner_field,
+                )
+                if not owned:
+                    raise AccessDenied(
+                        f"Order {order_id} was not found or is not assigned to you."
+                    )
+
+            raw = await client.retrieve_record(order_id)
+            return _json_response(
+                {
+                    "viewer_email": user.email,
+                    "order_id": order_id,
+                    "raw_record": raw,
+                }
+            )
+        except (AuthError, AccessDenied) as exc:
+            return _json_error("get_order_line_items", str(exc))
+        except VtigerError as exc:
+            return _json_error("get_order_line_items", str(exc))
 
     @mcp.tool
     async def get_my_overdue_followups(
