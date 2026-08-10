@@ -14,7 +14,7 @@ from vtiger_mcp.auth.users import (
 )
 from vtiger_mcp.config import get_settings
 from vtiger_mcp.modules import POTENTIALS, SALESORDER, VTCMSLA
-from vtiger_mcp.vtiger.client import VtigerClient, VtigerError
+from vtiger_mcp.vtiger.client import VtigerClient, VtigerError, extract_line_items
 
 
 def register_tools(mcp: FastMCP) -> None:
@@ -309,12 +309,11 @@ def register_tools(mcp: FastMCP) -> None:
         to them, checked before fetching. Admins may pass am_email to
         retrieve on another AM's behalf, or omit it to retrieve any order.
 
-        IMPORTANT, unverified field mapping: this returns Vtiger's raw
-        `retrieve` response. The exact key holding line items, and whether
-        it exposes unit_purchase_cost directly or only purchase_cost (a
-        LINE TOTAL, not per-unit, do not divide loosely, quantity affects
-        it) has not yet been confirmed against a real record. Check the raw
-        output structure before trusting any derived per-unit number.
+        Returns order header totals plus a clean line-item list: product,
+        quantity, unit list price, unit purchase cost, line total purchase
+        cost, line margin, margin/markup percentage, section, description.
+        unit_purchase_cost is confirmed present directly on each line, do
+        not compute it by dividing purchase_cost by quantity.
         """
         try:
             user = await get_authenticated_user()
@@ -338,11 +337,18 @@ def register_tools(mcp: FastMCP) -> None:
                     )
 
             raw = await client.retrieve_record(order_id)
+            line_items = extract_line_items(raw)
             return _json_response(
                 {
                     "viewer_email": user.email,
                     "order_id": order_id,
-                    "raw_record": raw,
+                    "order_number": raw.get("salesorder_no"),
+                    "vendor": raw.get("cf_salesorder_vendor"),
+                    "order_total": raw.get("hdnGrandTotal"),
+                    "order_margin_total": raw.get("cf_salesorder_finalmargin"),
+                    "order_purchase_cost_total": raw.get("purchase_cost_total"),
+                    "line_item_count": len(line_items),
+                    "line_items": line_items,
                 }
             )
         except (AuthError, AccessDenied) as exc:
