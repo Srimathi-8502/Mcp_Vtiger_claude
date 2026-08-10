@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 import re
@@ -14,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 _SAFE_IDENTIFIER = re.compile(r"^[A-Za-z0-9_]+$")
 _SAFE_RECORD_ID = re.compile(r"^[0-9]+x[0-9]+$")
+_MAX_RATE_LIMIT_RETRIES = 5
 _STALE_SESSION_MARKERS = (
     "session identifier",
     "invalid session",
@@ -70,19 +72,36 @@ class VtigerClient:
         params: dict[str, Any] | None = None,
         data: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        response = await client.request(
-            method,
-            self.settings.vtiger_webservice_url,
-            params=params,
-            data=data,
-        )
-        response.raise_for_status()
-        payload = response.json()
-        if not payload.get("success"):
-            error = payload.get("error", {})
-            message = error.get("message") or error.get("errorMsg") or "Unknown Vtiger error"
-            raise VtigerError(message)
-        return payload["result"]
+        delay = 1.0
+        for attempt in range(_MAX_RATE_LIMIT_RETRIES + 1):
+            response = await client.request(
+                method,
+                self.settings.vtiger_webservice_url,
+                params=params,
+                data=data,
+            )
+            if response.status_code == 429:
+                if attempt == _MAX_RATE_LIMIT_RETRIES:
+                    response.raise_for_status()
+                retry_after = response.headers.get("Retry-After")
+                wait_seconds = float(retry_after) if retry_after else delay
+                logger.warning(
+                    "Vtiger rate limit hit (429), retrying in %.1fs (attempt %s/%s)",
+                    wait_seconds, attempt + 1, _MAX_RATE_LIMIT_RETRIES,
+                )
+                await asyncio.sleep(wait_seconds)
+                delay = min(delay * 2, 30.0)
+                continue
+
+            response.raise_for_status()
+            payload = response.json()
+            if not payload.get("success"):
+                error = payload.get("error", {})
+                message = error.get("message") or error.get("errorMsg") or "Unknown Vtiger error"
+                raise VtigerError(message)
+            return payload["result"]
+
+        raise VtigerError("Vtiger rate limit exceeded, retries exhausted")
 
     async def _login(self, client: httpx.AsyncClient) -> str:
         if not self.settings.vtiger_base_url:
@@ -235,6 +254,46 @@ class VtigerClient:
         if limit is not None:
             records = records[:limit]
         return records
+
+    async def resolve_account_ids_by_name(self, name: str) -> list[str]:
+        """
+        Look up Account record IDs whose name contains `name` (partial match).
+        Used to translate an AM's typed organisation name into the internal
+        IDs stored on reference fields like cf_vtcmsla_organizationname or
+        Potentials.related_to, since those fields hold IDs, not text.
+        """
+        module = _validate_module(self.settings.vtiger_accounts_module)
+        name_field = _validate_field(self.settings.vtiger_field_account_name)
+        pattern = name if "%" in name else f"%{name}%"
+        query = f"SELECT id FROM {module} WHERE {name_field} LIKE {_quote(pattern)};"
+        rows = await self.query_all(query)
+        return [str(row["id"]) for row in rows if row.get("id")]
+
+    async def resolve_org_name_filters(
+        self,
+        filters: list[dict[str, Any]] | None,
+        org_field: str | None,
+    ) -> list[dict[str, Any]] | None:
+        """
+        Rewrite any filter on `org_field` from a typed name into an IN
+        filter on the matching Account IDs. AMs and Claude should never need
+        to know or guess a Vtiger internal ID.
+        """
+        if not filters or not org_field:
+            return filters
+
+        resolved: list[dict[str, Any]] = []
+        for filter_ in filters:
+            operator = str(filter_.get("operator", "")).upper()
+            if filter_.get("field") == org_field and operator in {"=", "LIKE"}:
+                name = str(filter_.get("value", ""))
+                ids = await self.resolve_account_ids_by_name(name)
+                resolved.append(
+                    {"field": org_field, "operator": "IN", "value": ids or ["__no_matching_org__"]}
+                )
+            else:
+                resolved.append(filter_)
+        return resolved
 
     async def list_users(self) -> list[dict[str, Any]]:
         query = "SELECT id, user_name, first_name, last_name, email1, status FROM Users;"
