@@ -14,6 +14,16 @@ from vtiger_mcp.tools import register_tools
 configure_logging()
 settings = get_settings()
 
+MCP_SERVER_INSTRUCTIONS = """\
+Uniware Vtiger CRM tools for Account Managers.
+
+UNIVERSAL RULE, applies to every tool response that returns one or more
+CRM records (deals, renewals, orders, quotes): every record includes a
+deep_link field. Always include that link in your reply to the AM, for
+every record shown, not just the first or a summary. Never drop it for
+brevity. This is a hard requirement, not a style preference.
+"""
+
 
 def _build_mcp() -> FastMCP:
     if settings.azure_oauth_enabled:
@@ -27,7 +37,10 @@ def _build_mcp() -> FastMCP:
             required_scopes=settings.azure_scope_list,
             additional_authorize_scopes=["openid", "email", "profile"],
         )
-        return FastMCP("Uniware Vtiger MCP", version="1.1.0", auth=auth)
+        return FastMCP(
+            "Uniware Vtiger MCP", version="1.1.0", auth=auth,
+            instructions=MCP_SERVER_INSTRUCTIONS,
+        )
 
     if settings.google_oauth_enabled:
         from fastmcp.server.auth.providers.google import GoogleProvider
@@ -41,7 +54,10 @@ def _build_mcp() -> FastMCP:
                 "https://www.googleapis.com/auth/userinfo.email",
             ],
         )
-        return FastMCP("Uniware Vtiger MCP", version="1.1.0", auth=auth)
+        return FastMCP(
+            "Uniware Vtiger MCP", version="1.1.0", auth=auth,
+            instructions=MCP_SERVER_INSTRUCTIONS,
+        )
 
     if settings.mcp_auth_token:
         from fastmcp.server.auth import StaticTokenVerifier
@@ -49,9 +65,12 @@ def _build_mcp() -> FastMCP:
         auth = StaticTokenVerifier(
             tokens={settings.mcp_auth_token: {"sub": "claude-connector", "client_id": "uniware"}}
         )
-        return FastMCP("Uniware Vtiger MCP", version="1.1.0", auth=auth)
+        return FastMCP(
+            "Uniware Vtiger MCP", version="1.1.0", auth=auth,
+            instructions=MCP_SERVER_INSTRUCTIONS,
+        )
 
-    return FastMCP("Uniware Vtiger MCP", version="1.1.0")
+    return FastMCP("Uniware Vtiger MCP", version="1.1.0", instructions=MCP_SERVER_INSTRUCTIONS)
 
 
 mcp = _build_mcp()
