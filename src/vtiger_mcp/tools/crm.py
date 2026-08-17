@@ -36,7 +36,16 @@ def register_tools(mcp: FastMCP) -> None:
         for record in records:
             record_id = record.get("id")
             if record_id:
-                record["deep_link"] = f"{base_url}/view/detail?module={module_api_name}&id={record_id}"
+                # Vtiger internal IDs are "<module_number>x<record_number>",
+                # e.g. "15x90674". Vtiger's own web UI links use only the
+                # numeric record_number after the "x", module is already
+                # given as a query param. Confirmed against a real record's
+                # own self-reported "url" field during SalesOrder testing:
+                # id "15x90674" -> url "...?module=SalesOrder&id=90674".
+                # Using the full composite ID here was the deep link bug
+                # Ilakkiya hit, "Error from deep link on opening".
+                numeric_id = str(record_id).split("x", 1)[-1]
+                record["deep_link"] = f"{base_url}/view/detail?module={module_api_name}&id={numeric_id}"
 
     @mcp.tool
     async def whoami() -> str:
