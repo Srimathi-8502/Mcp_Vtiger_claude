@@ -702,10 +702,14 @@ def register_tools(mcp: FastMCP) -> None:
         reply, for every ticket listed, not just a summary or the first one.
 
         This module is much larger than the others. For a vague request
-        like "show my tickets" with no qualifier, default to open/recent
-        tickets (filter casestatus to open states, or createdtime to a
-        recent window) rather than pulling the full history, which can run
-        into the thousands of rows for an active AM.
+        like "show my tickets" with no qualifier, default to
+        casestatus != 'Closed' rather than pulling the full history, which
+        can run into the thousands of rows for an active AM. Do NOT assume
+        a specific list of "open" status labels (e.g. "In Progress",
+        "Escalated"), those were guessed once and were wrong, confirmed
+        casestatus values so far are only 'Closed' and 'Assigned', more may
+        exist. "Not Closed" is the safe default regardless of what the
+        actual open-state labels turn out to be.
 
         Do not ask the user for a Vtiger owner ID. Regular AMs always see
         only tickets assigned to them. Admins may pass am_email to view
